@@ -18,11 +18,17 @@ branch_labels: Union[str, Sequence[str], None] = ${repr(branch_labels)}
 depends_on: Union[str, Sequence[str], None] = ${repr(depends_on)}
 
 
-def upgrade() -> None:
-    """Upgrade schema."""
-    ${upgrades if upgrades else "pass"}
+def upgrade():
+    op.execute(
+        """
+        ${upgrades if upgrades else "# SQL komutlarınızı buraya yazın"}
+    """
+    )
 
 
-def downgrade() -> None:
-    """Downgrade schema."""
-    ${downgrades if downgrades else "pass"}
+def downgrade():
+    op.execute(
+        """
+        ${downgrades if downgrades else "# Geri alma SQL komutlarınızı buraya yazın"}
+    """
+    )
