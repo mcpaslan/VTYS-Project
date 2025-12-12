@@ -219,19 +219,23 @@ def seed_program_exercises(conn):
 
 def seed_coaches(conn):
     """Coaches tablosuna veri ekler"""
+    import hashlib
     cursor = conn.cursor()
     print("Coaches ekleniyor...")
 
     coaches_data = [
+        ("admin", "admin@gym.com", "admin123"),
         ("coach1", "coach1@example.com", "password123"),
         ("coach2", "coach2@example.com", "password123"),
         ("coach3", "coach3@example.com", "password123"),
     ]
 
     for username, email, password in coaches_data:
+        # Şifreyi SHA256 ile hash'le (dao.py ile aynı yöntem)
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
         cursor.execute(
             "INSERT INTO coaches (username, email, password) VALUES (%s, %s, %s) ON CONFLICT DO NOTHING",
-            (username, email, password),
+            (username, email, password_hash),
         )
 
     conn.commit()

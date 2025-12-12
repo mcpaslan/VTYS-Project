@@ -2,7 +2,10 @@ alembic==1.17.2
 importlib_metadata==8.7.0
 Mako==1.3.10
 MarkupSafe==3.0.3
+numpy==1.26.4
+opencv-python-headless==4.8.1.78
 psycopg2-binary==2.9.11
+PyQt5==5.15.10
 python-dotenv==1.2.1
 SQLAlchemy==2.0.44
 sqlparse==0.5.4
