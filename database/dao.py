@@ -159,6 +159,9 @@ def create_user(
 ) -> int:
     """Create a new user. Returns the new user ID"""
     conn = get_db_connection()
+    email = (email or "").strip()
+    if email == "":
+        email = None
     try:
         cur = conn.cursor()
         cur.execute(
