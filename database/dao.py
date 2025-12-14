@@ -6,6 +6,85 @@ Contains all database get/set functions for PyQt UI
 from datetime import datetime, date
 from typing import Optional, List, Dict, Any
 from database.db import get_db_connection
+import re
+import hashlib
+
+
+# ==================== VALIDATION FUNCTIONS ====================
+
+
+def tc_dogrula(tc_no: str) -> tuple[bool, str]:
+    """TC kimlik numarasını doğrular."""
+    if not tc_no:
+        return False, "TC kimlik numarası boş olamaz!"
+    
+    if len(tc_no) != 11:
+        return False, "TC kimlik numarası 11 haneli olmalıdır!"
+    
+    if not tc_no.isdigit():
+        return False, "TC kimlik numarası sadece rakamlardan oluşmalıdır!"
+    
+    if tc_no[0] == '0':
+        return False, "TC kimlik numarası 0 ile başlayamaz!"
+    
+    return True, "Geçerli"
+
+
+def email_dogrula(email: str) -> tuple[bool, str]:
+    """Email adresini doğrular."""
+    if not email:
+        return True, "Geçerli"  # Email opsiyonel
+    
+    # Basit ama etkili email regex
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        return False, "Geçerli bir email adresi giriniz! (ornek@email.com)"
+    
+    return True, "Geçerli"
+
+
+def telefon_dogrula(telefon: str) -> tuple[bool, str]:
+    """Telefon numarasını doğrular (Türkiye formatı)."""
+    if not telefon:
+        return True, "Geçerli"  # Telefon opsiyonel
+    
+    # Sadece rakamları al
+    telefon_temiz = re.sub(r'[^0-9]', '', telefon)
+    
+    # 10 veya 11 haneli olmalı (0 ile başlarsa 11, başlamazsa 10)
+    if len(telefon_temiz) == 11 and telefon_temiz[0] == '0':
+        return True, "Geçerli"
+    elif len(telefon_temiz) == 10 and telefon_temiz[0] != '0':
+        return True, "Geçerli"
+    else:
+        return False, "Telefon numarası 10 veya 11 haneli olmalıdır! (örn: 05XX XXX XX XX)"
+
+
+# ==================== COACH AUTHENTICATION ====================
+
+
+def giris_kontrol(kullanici_adi: str, sifre: str) -> str:
+    """Coach giriş kontrolü (UI uyumluluğu için)"""
+    coach = get_coach_by_username(kullanici_adi)
+    
+    if not coach:
+        return "BULUNAMADI"
+    
+    sifre_hash = hashlib.sha256(sifre.encode()).hexdigest()
+    if coach['password'] == sifre_hash:
+        return "BASARILI"
+    else:
+        return "HATALI_SIFRE"
+
+
+def kullanici_kaydet(kullanici_adi: str, sifre: str, email: str) -> bool:
+    """Yeni coach kaydı oluşturur (UI uyumluluğu için)"""
+    try:
+        sifre_hash = hashlib.sha256(sifre.encode()).hexdigest()
+        create_coach(kullanici_adi, email, sifre_hash)
+        return True
+    except Exception:
+        return False
 
 
 # ==================== USERS ====================
