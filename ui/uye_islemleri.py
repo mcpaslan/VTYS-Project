@@ -109,14 +109,36 @@ class UyeIslemleri(QWidget):
         # Üyelik Paketi Grubu
         paket_group = QGroupBox('Üyelik Paketi')
         paket_group.setStyleSheet(kisisel_group.styleSheet())
-        paket_layout = QFormLayout()
-        paket_layout.setSpacing(15)
+        paket_layout = QVBoxLayout()
+        paket_layout.setSpacing(10)
         
         self.paket_combo = QComboBox()
         self.paketleri_yukle()
         self.styleInput(self.paket_combo)
         
-        paket_layout.addRow('Paket Seçin *:', self.paket_combo)
+        # Paket refresh layout
+        paket_secim_layout = QHBoxLayout()
+        paket_secim_layout.addWidget(self.paket_combo)
+        
+        refresh_btn = QPushButton("🔄")
+        refresh_btn.setFixedSize(40, 40)
+        refresh_btn.setToolTip("Paket Listesini Yenile")
+        refresh_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #3498db;
+                color: white;
+                border-radius: 8px;
+                font-size: 18px;
+            }
+            QPushButton:hover {
+                background-color: #2980b9;
+            }
+        """)
+        refresh_btn.clicked.connect(self.paketleri_yukle)
+        paket_secim_layout.addWidget(refresh_btn)
+        
+        paket_layout.addWidget(QLabel('Paket Seçin *:'))
+        paket_layout.addLayout(paket_secim_layout)
         paket_group.setLayout(paket_layout)
         layout.addWidget(paket_group)
         
@@ -244,6 +266,7 @@ class UyeIslemleri(QWidget):
         """)
     
     def paketleri_yukle(self):
+        self.paket_combo.clear()
         paketler = dao.get_all_packages()
         for paket in paketler:
             # PostgreSQL dict format: {id, name, duration_days, price, description}

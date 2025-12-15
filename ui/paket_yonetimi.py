@@ -190,8 +190,25 @@ class PaketYonetimi(QWidget):
         """)
         ekle_btn.clicked.connect(self.paket_ekle_dialog)
         
+        sil_btn = QPushButton('🗑️ Paket Sil')
+        sil_btn.setFixedSize(120, 40)
+        sil_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                font-weight: bold;
+                border-radius: 6px;
+                border: none;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        sil_btn.clicked.connect(self.paket_sil)
+        
         btn_layout.addWidget(yenile_btn)
         btn_layout.addWidget(ekle_btn)
+        btn_layout.addWidget(sil_btn)
         
         header_layout.addLayout(baslik_layout)
         header_layout.addStretch()
@@ -309,3 +326,35 @@ class PaketYonetimi(QWidget):
         dialog = PaketEkleDialog(self)
         if dialog.exec_() == QDialog.Accepted:
             self.paketleri_yukle()
+            
+    def paket_sil(self):
+        """Seçili paketi siler."""
+        secili_satirlar = self.paket_tablosu.selectedItems()
+        if not secili_satirlar:
+            QMessageBox.warning(self, 'Uyarı', 'Lütfen silmek için bir paket seçin!')
+            return
+            
+        satir = secili_satirlar[0].row()
+        paket_id = int(self.paket_tablosu.item(satir, 0).text())
+        paket_adi = self.paket_tablosu.item(satir, 1).text()
+        
+        # Onay al
+        reply = QMessageBox.question(
+            self,
+            'Paket Sil',
+            f'"{paket_adi}" isimli paketi silmek istediğinize emin misiniz?\n\n'
+            f'Bu işlem geri alınamaz!',
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No
+        )
+        
+        if reply == QMessageBox.Yes:
+            try:
+                if dao.delete_package(paket_id):
+                    QMessageBox.information(self, 'Başarılı', 'Paket başarıyla silindi!')
+                    self.paketleri_yukle()
+                else:
+                    QMessageBox.warning(self, 'Hata', 'Paket silinirken bir hata oluştu!')
+            except Exception as e:
+                # Veritabanı constraint hatası olabilir
+                QMessageBox.critical(self, 'Hata', f'Paket silinemedi!\n\nHata: {str(e)}\n\nBu paket kullanımda olabilir.')

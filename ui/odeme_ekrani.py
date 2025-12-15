@@ -162,12 +162,8 @@ class OdemeEkrani(QWidget):
         # Yeni istatistikleri hesapla
         odemeler = dao.get_all_subscriptions()
         toplam_odeme = len(odemeler)
-        toplam_tutar = sum(o.get('price_sold', 0) for o in odemeler) if odemeler else 0
-        
-        # Widget'lari ekle
-        self.stats_layout.addWidget(self.create_stat_box('Toplam Gelir', f'{toplam_tutar:,.0f} TL', '#2c3e50'))
+        # Baru widgetlari ekle
         self.stats_layout.addWidget(self.create_stat_box('Toplam Islem', str(toplam_odeme), '#34495e'))
-        self.stats_layout.addWidget(self.create_stat_box('Ortalama', f'{toplam_tutar/toplam_odeme:,.0f} TL' if toplam_odeme > 0 else '0 TL', '#1a1a2e'))
     
     def odemeler_yukle(self):
         self.istatistikleri_guncelle()  # Istatistikleri guncelle

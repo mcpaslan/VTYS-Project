@@ -13,6 +13,7 @@ from uyelik_yenile_dialog import UyelikYenileDialog
 from program_yonetimi import ProgramYonetimiWidget
 from program_ata_dialog import ProgramAtaDialog
 from program_goruntule_dialog import ProgramGoruntuleDialog
+from datetime import datetime
 
 
 class AnaSayfa(QMainWindow):
@@ -187,16 +188,11 @@ class AnaSayfa(QMainWindow):
         uyeler = dao.get_all_users()
         toplam_uye = len(uyeler)
         
-        # Aktif uyelikler (paket adi varsa aktif)
-        aktif_uyelik = sum(1 for u in uyeler if u.get('program_name'))  
-        
-        # Toplam gelir (sadece aktif uyelerin odemeleri)
-        odemeler = dao.get_all_subscriptions()
-        toplam_gelir = sum(o.get('price_sold', 0) for o in odemeler) if odemeler else 0
+        # Aktif uyelikler (status == 'Aktif')
+        aktif_uyelik = sum(1 for u in uyeler if u.get('status') == 'Aktif')  
         
         stats_layout.addWidget(self.create_stat_card("Toplam Uye", str(toplam_uye), "#2c3e50"))
         stats_layout.addWidget(self.create_stat_card("Aktif Uyelik", str(aktif_uyelik), "#34495e"))
-        stats_layout.addWidget(self.create_stat_card("Toplam Gelir", f"{toplam_gelir:,.0f} TL", "#1a1a2e"))
         stats_layout.addWidget(self.create_stat_card("Paket Sayisi", str(len(dao.get_all_packages())), "#16213e"))
         
         layout.addLayout(stats_layout)
@@ -410,10 +406,10 @@ class AnaSayfa(QMainWindow):
         
         # Tablo
         self.uye_tablosu = QTableWidget()
-        self.uye_tablosu.setColumnCount(8)
+        self.uye_tablosu.setColumnCount(9)
         self.uye_tablosu.setHorizontalHeaderLabels(['ID', 'Ad Soyad', 'TC No', 
                                                      'Telefon', 'E-posta', 'Paket', 
-                                                     'Başlangıç', 'Bitiş'])
+                                                     'Başlangıç', 'Bitiş', 'Durum'])
         
         # Sütun genişliklerini ayarla
         self.uye_tablosu.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
@@ -468,11 +464,28 @@ class AnaSayfa(QMainWindow):
             baslangic = subscriptions[0].get('start_date', '') if subscriptions else '-'
             bitis = subscriptions[0].get('end_date', '') if subscriptions else '-'
             
-            data = [id_val, ad_soyad, tc_no, telefon, email, program_name, str(baslangic), str(bitis)]
+            # Durum hesapla (Bitiş tarihi >= Şu an ise Aktif)
+            durum = 'Pasif'
+            durum_renk = Qt.red
+            
+            if subscriptions:
+                end_date = subscriptions[0].get('end_date')
+                if end_date and isinstance(end_date, datetime):
+                    if datetime.now() <= end_date:
+                        durum = 'Aktif'
+                        durum_renk = Qt.darkGreen
+            
+            data = [id_val, ad_soyad, tc_no, telefon, email, program_name, str(baslangic), str(bitis), durum]
             
             for j, veri in enumerate(data):
                 item = QTableWidgetItem(str(veri) if veri else "-")
                 item.setTextAlignment(Qt.AlignCenter)
+                
+                # Durum sütunu renklendirme
+                if j == 8:
+                    item.setForeground(durum_renk)
+                    item.setFont(QFont('Arial', 11, QFont.Bold))
+                
                 self.uye_tablosu.setItem(i, j, item)
     
     def uye_ara(self):
