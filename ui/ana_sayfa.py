@@ -14,6 +14,8 @@ from program_yonetimi import ProgramYonetimiWidget
 from program_ata_dialog import ProgramAtaDialog
 from program_goruntule_dialog import ProgramGoruntuleDialog
 from datetime import datetime
+from PyQt5.QtWidgets import QListWidget
+from turnike_simulasyon import TurnikeWorker
 
 
 class AnaSayfa(QMainWindow):
@@ -175,6 +177,9 @@ class AnaSayfa(QMainWindow):
         return header
     
     def create_dashboard(self):
+        # Tabloyu garantile
+        dao.ensure_access_log_table()
+        
         widget = QWidget()
         layout = QVBoxLayout()
         layout.setContentsMargins(20, 20, 20, 20)
@@ -193,17 +198,67 @@ class AnaSayfa(QMainWindow):
         
         stats_layout.addWidget(self.create_stat_card("Toplam Uye", str(toplam_uye), "#2c3e50"))
         stats_layout.addWidget(self.create_stat_card("Aktif Uyelik", str(aktif_uyelik), "#34495e"))
+        
+        # Icerideki Uye Karti (Turnike Simulasyonu)
+        self.icerideki_label = self.create_stat_card("İçerideki Üye", "0", "#e67e22")
+        stats_layout.addWidget(self.icerideki_label)
+        
+        # Paket Sayisi
         stats_layout.addWidget(self.create_stat_card("Paket Sayisi", str(len(dao.get_all_packages())), "#16213e"))
         
         layout.addLayout(stats_layout)
         
-
+        # --- CANLI TURNIKE LOGLARI ---
+        log_layout = QVBoxLayout()
+        log_baslik = QLabel("📡 Canlı Turnike Logları")
+        log_baslik.setFont(QFont('Arial', 14, QFont.Bold))
+        log_baslik.setStyleSheet("color: #2c3e50; margin-top: 10px;")
+        
+        # QTableWidget Olarak Degistirildi
+        self.log_tablosu = QTableWidget()
+        self.log_tablosu.setColumnCount(4)
+        self.log_tablosu.setHorizontalHeaderLabels(['Zaman', 'Eylem', 'Üye', 'Program'])
+        
+        # Tablo ayarlari
+        self.log_tablosu.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.log_tablosu.verticalHeader().setVisible(False)
+        self.log_tablosu.setAlternatingRowColors(True)
+        self.log_tablosu.setSelectionBehavior(QTableWidget.SelectRows)
+        self.log_tablosu.setEditTriggers(QTableWidget.NoEditTriggers)
+        self.log_tablosu.setStyleSheet("""
+            QTableWidget {
+                background-color: white;
+                border: 2px solid #bdc3c7;
+                border-radius: 8px;
+                font-family: 'Arial';
+                font-size: 13px;
+            }
+            QHeaderView::section {
+                background-color: #ecf0f1;
+                color: #2c3e50;
+                padding: 8px;
+                font-weight: bold;
+                border: none;
+            }
+        """)
+        self.log_tablosu.setFixedHeight(250)
+        
+        log_layout.addWidget(log_baslik)
+        log_layout.addWidget(self.log_tablosu)
+        layout.addLayout(log_layout)
+        
+        # Baslangic verilerini yukle
+        self.loglari_yukle()
+        self.icerideki_label.layout().itemAt(1).widget().setText(str(dao.get_inside_count()))
+        
+        # Worker baslat (Eger zaten calismiyorsa)
+        if not hasattr(self, 'turnike_worker'):
+            self.turnike_worker = TurnikeWorker()
+            self.turnike_worker.log_sinyali.connect(self.log_ekle)
+            self.turnike_worker.sayac_sinyali.connect(self.icerideki_guncelle)
+            self.turnike_worker.start()
+        
     
-        welcome_label = QLabel(f"Hoş geldiniz, {self.kullanici_adi}! 👋")
-        welcome_label.setFont(QFont('Arial', 16, QFont.Bold))
-        welcome_label.setStyleSheet("color: #2c3e50; padding: 20px;")
-        welcome_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(welcome_label)
         
         info_label = QLabel("Yukarıdaki menüden işlem yapmak istediğiniz bölümü seçebilirsiniz.")
         info_label.setFont(QFont('Arial', 12))
@@ -274,6 +329,74 @@ class AnaSayfa(QMainWindow):
         
         card.setLayout(layout)
         return card
+
+    def loglari_yukle(self):
+        """Bugunun loglarini DB'den yukle"""
+        # DB'den [Newest, ..., Oldest] geliyor
+        logs = dao.get_todays_access_logs()
+        self.log_tablosu.setRowCount(0)
+        
+        # En yeni log en ustte olmali.
+        # DB'den gelen listeyi ters cevirirsek [Oldest, ..., Newest] olur.
+        # log_ekle_tablo methodu insertRow(0) yapiyor (EN USTE EKLİYOR).
+        # Yani sirayla:
+        # 1. Oldest -> Tablo[0]
+        # 2. 2nd Oldest -> Tablo[0] (Oldest asagi duser)
+        # ...
+        # Son. Newest -> Tablo[0].
+        # Sonuc: [Newest, ..., Oldest]. Bu istedigimiz sey.
+        
+        for log in reversed(logs):
+             zaman = log.get('time_str', '')
+             islem = log.get('action_type', '')
+             ad_soyad = f"{log.get('first_name', '')} {log.get('last_name', '')}"
+             program = log.get('program_name') or "Program Yok"
+             self.log_ekle_tablo(zaman, islem, ad_soyad, program)
+
+    def log_ekle(self, zaman, islem, ad_soyad, program):
+        """Worker'dan gelen sinyal ile tabloya ekle. Signal imzasi: str, str, str, str"""
+        self.log_ekle_tablo(zaman, islem, ad_soyad, program)
+
+    def log_ekle_tablo(self, zaman, islem, ad_soyad, program):
+        """Tabloya satir ekleme islemi (En uste)"""
+        self.log_tablosu.insertRow(0)
+        
+        item_zaman = QTableWidgetItem(zaman)
+        item_islem = QTableWidgetItem(islem)
+        item_ad = QTableWidgetItem(ad_soyad)
+        item_prog = QTableWidgetItem(program)
+        
+        # Renklendirme
+        if islem == "GİRİŞ":
+            item_islem.setForeground(Qt.darkGreen)
+            item_islem.setText("🟢 GİRİŞ")
+        else:
+            item_islem.setForeground(Qt.red)
+            item_islem.setText("🔴 ÇIKIŞ")
+            
+        item_islem.setFont(QFont('Arial', 12, QFont.Bold))
+        item_zaman.setTextAlignment(Qt.AlignCenter)
+        item_islem.setTextAlignment(Qt.AlignCenter)
+        
+        self.log_tablosu.setItem(0, 0, item_zaman)
+        self.log_tablosu.setItem(0, 1, item_islem)
+        self.log_tablosu.setItem(0, 2, item_ad)
+        self.log_tablosu.setItem(0, 3, item_prog)
+        
+        # Temizlik
+        if self.log_tablosu.rowCount() > 100:
+            self.log_tablosu.removeRow(100)
+            
+    def icerideki_guncelle(self, sayi):
+        """Icerideki uye sayisini gunceller."""
+        # Kartin icindeki 2. label (deger labeli) guncellenecek
+        try:
+             layout = self.icerideki_label.layout()
+             deger_label = layout.itemAt(1).widget()
+             if isinstance(deger_label, QLabel):
+                 deger_label.setText(str(sayi))
+        except Exception as e:
+            print(f"Sayac guncelleme hatasi: {e}")
     
 
     def create_uye_listesi(self):
@@ -606,4 +729,8 @@ class AnaSayfa(QMainWindow):
         dialog.exec_()
     
     def closeEvent(self, event):
+        # Worker'i durdur
+        if hasattr(self, 'turnike_worker'):
+            self.turnike_worker.durdur()
+            self.turnike_worker.wait()
         event.accept()

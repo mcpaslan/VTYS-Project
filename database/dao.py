@@ -118,7 +118,7 @@ def get_all_users() -> List[Dict[str, Any]]:
             """SELECT u.*, p.name as program_name 
                FROM users u 
                LEFT JOIN programs p ON u.current_program_id = p.id 
-               ORDER BY u.created_at DESC"""
+               ORDER BY u.id ASC"""
         )
         return [dict(row) for row in cur.fetchall()]
     finally:
@@ -261,6 +261,11 @@ def delete_user(user_id: int) -> bool:
     try:
         cur = conn.cursor()
         cur.execute("DELETE FROM users WHERE id = %s", (user_id,))
+        
+        # Reset ID sequence to current max ID
+        # This ensures the next inserted user takes the next available ID (e.g. if last user was deleted)
+        cur.execute("SELECT setval(pg_get_serial_sequence('users', 'id'), COALESCE(MAX(id), 0) + 1, false) FROM users")
+        
         conn.commit()
         return cur.rowcount > 0
     finally:
@@ -795,6 +800,129 @@ def get_coach(coach_id: int) -> Optional[Dict[str, Any]]:
         cur.execute("SELECT * FROM coaches WHERE id = %s", (coach_id,))
         result = cur.fetchone()
         return dict(result) if result else None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_coach_by_username(username: str) -> Optional[Dict[str, Any]]:
+    """Get a coach by username"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("SELECT * FROM coaches WHERE username = %s", (username,))
+        result = cur.fetchone()
+        return dict(result) if result else None
+    finally:
+        cur.close()
+        conn.close()
+
+
+def create_coach(username: str, email: str, password_hash: str) -> int:
+    """Create a new coach"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO coaches (username, email, password) VALUES (%s, %s, %s) RETURNING id",
+            (username, email, password_hash),
+        )
+        coach_id = cur.fetchone()["id"]
+        conn.commit()
+        return coach_id
+    finally:
+        cur.close()
+        conn.close()
+
+
+# ==================== ACCESS LOGS ====================
+
+
+def ensure_access_log_table():
+    """Create access_logs table if not exists"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """CREATE TABLE IF NOT EXISTS access_logs (
+                id SERIAL PRIMARY KEY,
+                user_id INT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+                action_type VARCHAR(20) NOT NULL, -- 'GİRİŞ' or 'ÇIKIŞ'
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )"""
+        )
+        conn.commit()
+    finally:
+        cur.close()
+        conn.close()
+
+
+def add_access_log(user_id: int, action_type: str) -> bool:
+    """Add a new access log"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "INSERT INTO access_logs (user_id, action_type) VALUES (%s, %s)",
+            (user_id, action_type),
+        )
+        conn.commit()
+        return True
+    except Exception as e:
+        print(f"Error adding log: {e}")
+        return False
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_todays_access_logs() -> List[Dict[str, Any]]:
+    """Get access logs for today"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            """SELECT al.*, u.first_name, u.last_name, p.name as program_name 
+               FROM access_logs al 
+               JOIN users u ON al.user_id = u.id 
+               LEFT JOIN programs p ON u.current_program_id = p.id 
+               WHERE DATE(al.created_at) = CURRENT_DATE 
+               ORDER BY al.created_at DESC"""
+        )
+        logs = []
+        for row in cur.fetchall():
+            log = dict(row)
+            # Format time for display
+            if log.get('created_at'):
+                log['time_str'] = log['created_at'].strftime("%H:%M:%S")
+            logs.append(log)
+        return logs
+    finally:
+        cur.close()
+        conn.close()
+
+
+def get_inside_count() -> int:
+    """Calculate how many people are currently inside (Entries > Exits today)"""
+    # Simple logic: For each user, if last action today was 'GİRİŞ', they are inside.
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        # Subquery finds the latest log_id for each user today
+        # We then check if that latest action was 'GİRİŞ'
+        cur.execute(
+            """
+            SELECT COUNT(*) as count FROM (
+                SELECT DISTINCT ON (user_id) action_type 
+                FROM access_logs 
+                WHERE DATE(created_at) = CURRENT_DATE 
+                ORDER BY user_id, created_at DESC
+            ) as latest_actions 
+            WHERE action_type = 'GİRİŞ'
+            """
+        )
+        result = cur.fetchone()
+        return result['count'] if result else 0
     finally:
         cur.close()
         conn.close()
