@@ -248,7 +248,9 @@ def seed_users(conn, num_users=20):
     print(f"{num_users} user ekleniyor...")
 
     genders = ["Erkek", "Kadın", "Diğer"]
-    statuses = ["Aktif", "Pasif"]
+    genders = ["Erkek", "Kadın", "Diğer"]
+    # Varsayılan olarak çoğunlukla Aktif olsun
+    statuses = ["Aktif", "Aktif", "Aktif", "Pasif"]
 
     # Program ID'lerini al
     cursor.execute("SELECT id FROM programs")
