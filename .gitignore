@@ -1,7 +1,8 @@
 .env
 venv/
+.venv*/
 __pycache__/
 *.db
 *.mp4
 *.bak
-
+.idea/
