@@ -19,11 +19,8 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade():
-    op.execute(
-        """
-        # SQL komutlarınızı buraya yazın
-    """
-    )
+    pass
+    
 
 
 def downgrade():

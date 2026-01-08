@@ -37,7 +37,7 @@ class ProgramYonetimiWidget(QWidget):
         """)
         self.yeni_program_btn.clicked.connect(self.yeni_program_dialog)
         
-        self.program_duzenle_btn = QPushButton("✏️ Düzenle")
+        self.program_duzenle_btn = QPushButton("Program Düzenle")
         self.program_duzenle_btn.setStyleSheet("""
             QPushButton {
                 background-color: #3498db;
@@ -325,6 +325,7 @@ class ProgramOlusturDialog(QDialog):
         # Egzersiz seçimi
         egzersiz_combo = QComboBox()
         egzersiz_combo.setMinimumWidth(200)
+        egzersiz_combo.setEditable(True)
         egzersizler = dao.get_all_exercises()
         for egz in egzersizler:
             # PostgreSQL dict: {id, name, muscle_group, description}
@@ -380,21 +381,39 @@ class ProgramOlusturDialog(QDialog):
         satir.setLayout(satir_layout)
         
         # Eğer mevcut egzersiz varsa değerleri doldur
+        # Egzersiz verisini debug et
+        # Egzersiz verisini yükle
         if egzersiz_data:
-            # PostgreSQL dict: {id, program_id, exercise_id, sets, reps}
-            # Egzersiz seçimi
-            index = egzersiz_combo.findData(egzersiz_data.get('exercise_id'))
+            ex_id = egzersiz_data.get('exercise_id')
+            
+            # Egzersiz seçimi - Tip güvenli arama
+            index = -1
+            # Önce standart aramayı dene
+            index = egzersiz_combo.findData(ex_id)
+            
+            # Eğer bulunamazsa string karşılaştırması yap (int vs str sorunları için)
+            if index == -1:
+                for i in range(egzersiz_combo.count()):
+                    item_data = egzersiz_combo.itemData(i)
+                    if str(item_data) == str(ex_id):
+                        index = i
+                        break
+            
             if index >= 0:
                 egzersiz_combo.setCurrentIndex(index)
             
-            # Gün - PostgreSQL'de gün yok, varsayılan kullan
-            # gun_index = gun_combo.findText(egzersiz_data.get('day', 'Pazartesi'))
-            # if gun_index >= 0:
-            #     gun_combo.setCurrentIndex(gun_index)
+            # Gün verisi
+            gun_text = egzersiz_data.get('day', 'Pazartesi')
+            gun_index = gun_combo.findText(gun_text)
+            if gun_index >= 0:
+                gun_combo.setCurrentIndex(gun_index)
             
             set_input.setValue(egzersiz_data.get('sets', 3))
             tekrar_input.setText(str(egzersiz_data.get('reps', '10-12')))
-            dinlenme_input.setText('60sn')  # PostgreSQL'de dinlenme yok, varsayılan
+            dinlenme_input.setText('60sn')
+        else:
+            # Yeni satır - Boş seçim
+            egzersiz_combo.setCurrentIndex(-1)
         
         # Satırı kaydet
         self.egzersiz_satirlari.append({
@@ -451,7 +470,16 @@ class ProgramOlusturDialog(QDialog):
             
             # Egzersizleri ekle
             for satir in self.egzersiz_satirlari:
-                egzersiz_id = satir['egzersiz_combo'].currentData()
+                combo = satir['egzersiz_combo']
+                egzersiz_id = combo.currentData()
+                egzersiz_adi = combo.currentText().strip()
+                
+                # Eğer listeden seçilmediyse (yeni giriş)
+                if combo.currentIndex() == -1:
+                    if not egzersiz_adi:
+                        continue 
+                    # Yeni egzersiz oluştur veya varsa ID'sini al
+                    egzersiz_id = dao.create_exercise(egzersiz_adi)
                 set_sayisi = satir['set_input'].value()
                 tekrar = satir['tekrar_input'].text().strip()
                 

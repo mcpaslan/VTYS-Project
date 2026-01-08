@@ -19,8 +19,8 @@ class TurnikeWorker(QThread):
         dao.ensure_access_log_table()
 
         # Zamanlayicilar (saniye cinsinden)
-        self.giris_bekleme = random.randint(1, 4)  # 1-4 saniye
-        self.cikis_bekleme = random.randint(2, 6)  # 2-6 saniye
+        self.giris_bekleme = random.randint(1, 20)  # 1-4 saniye
+        self.cikis_bekleme = random.randint(10, 30)  # 2-6 saniye
 
         self.gecen_sure_giris = 0
         self.gecen_sure_cikis = 0

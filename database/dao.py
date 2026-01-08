@@ -394,6 +394,12 @@ def create_exercise(name: str) -> int:
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        # First check if exists
+        cur.execute("SELECT id FROM exercises WHERE name = %s", (name,))
+        existing = cur.fetchone()
+        if existing:
+            return existing['id']
+            
         cur.execute("INSERT INTO exercises (name) VALUES (%s) RETURNING id", (name,))
         exercise_id = cur.fetchone()["id"]
         conn.commit()
@@ -509,6 +515,19 @@ def remove_exercise_from_program(program_exercise_id: int) -> bool:
         cur.execute(
             "DELETE FROM program_exercises WHERE id = %s", (program_exercise_id,)
         )
+        conn.commit()
+        return cur.rowcount > 0
+    finally:
+        cur.close()
+        conn.close()
+
+
+def delete_program_exercises(program_id: int) -> bool:
+    """Delete all exercises for a program"""
+    conn = get_db_connection()
+    try:
+        cur = conn.cursor()
+        cur.execute("DELETE FROM program_exercises WHERE program_id = %s", (program_id,))
         conn.commit()
         return cur.rowcount > 0
     finally:
@@ -694,6 +713,8 @@ def create_subscription(
     conn = get_db_connection()
     try:
         cur = conn.cursor()
+        _ensure_payment_type_exists(cur, payment_type_id)
+        
         cur.execute(
             """INSERT INTO subscriptions (user_id, package_id, start_date, end_date, 
                price_sold, payment_type_id) 
@@ -706,6 +727,28 @@ def create_subscription(
     finally:
         cur.close()
         conn.close()
+
+def _ensure_payment_type_exists(cur, type_id: int):
+    """Ensure the specific payment type exists, insert if missing"""
+    cur.execute("SELECT 1 FROM payment_types WHERE id = %s", (type_id,))
+    if not cur.fetchone():
+        defaults = {
+            1: ('Nakit', 'Nakit ödeme'),
+            2: ('Kredi Kartı', 'Kredi kartı ile ödeme'),
+            3: ('Havale/EFT', 'Banka havalesi ile ödeme')
+        }
+        
+        if type_id in defaults:
+            name, desc = defaults[type_id]
+            cur.execute(
+                "INSERT INTO payment_types (id, name, description) VALUES (%s, %s, %s)",
+                (type_id, name, desc)
+            )
+            # Update sequence just in case
+            try:
+                cur.execute(f"SELECT setval(pg_get_serial_sequence('payment_types', 'id'), {type_id})")
+            except:
+                pass # Ignore if sequence update fails (e.g. permission or not serial)
 
 
 def update_subscription(
